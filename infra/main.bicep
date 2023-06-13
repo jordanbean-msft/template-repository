@@ -17,10 +17,29 @@ var abbrs = loadJsonContent('./abbreviations.json')
 var resourceToken = toLower(uniqueString(subscription().id, environmentName, location))
 var tags = { 'azd-env-name': environmentName }
 
-resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
+resource resourceGroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: !empty(resourceGroupName) ? resourceGroupName : '${abbrs.resourcesResourceGroups}${environmentName}'
   location: location
   tags: tags
+}
+
+module names 'resource-names.bicep' = {
+  scope: az.resourceGroup(resourceGroup.name)
+  name: 'resource-names'
+  params: {
+    resourceToken: resourceToken
+  }
+}
+
+module loggingDeployment 'logging.bicep' = {
+  scope: az.resourceGroup(resourceGroup.name)
+  name: 'logging-deployment'
+  params: {
+    appInsightsName: names.outputs.appInsightsName
+    logAnalyticsWorkspaceName: names.outputs.logAnalyticsWorkspaceName
+    location: location
+    tags: tags
+  }
 }
 
 output AZURE_LOCATION string = location
