@@ -52,3 +52,12 @@ applyTo: "**/*.py"
 * Agent Framework provides a higher-level, more maintainable interface for building agent systems and LLM interactions.
 * Example: `uv add microsoft-agents` — this will pull the latest version.
 * For agent-specific guidance, refer to Agent Framework documentation and examples in the repository's prompt files (`.github/prompts/`).
+
+## Structured Output from LLMs — Always use Pydantic
+
+* **Always request structured output from LLMs** using Pydantic models instead of parsing free-form text.
+* Define clear Pydantic schemas (`BaseModel` subclasses) for all LLM responses.
+* Use Microsoft Agent Framework's structured output capabilities when available, passing Pydantic models as response schemas.
+* Benefits: type safety, validation, predictable responses, easier testing, and reduced parsing errors.
+* Example: Instead of parsing JSON strings, use `response_format=MyPydanticModel` to get validated instances.
+* Ensure all public LLM-facing functions have explicit type hints with Pydantic model return types.

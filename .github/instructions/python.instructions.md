@@ -12,6 +12,7 @@ applyTo: "**/*.py"
 * Keep functions small and composable.
 * Use dependency injection for external services.
 * **For LLM interactions, use Microsoft Agent Framework** (`microsoft-agents`). Never use `azure-ai-projects` directly if Agent Framework provides the needed functionality.
+* **Always use Pydantic models for structured LLM output** instead of parsing free-form text responses. This ensures type safety and validation.
 
 ## Runtime behavior
 
