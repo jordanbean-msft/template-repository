@@ -11,6 +11,7 @@ applyTo: "**/*.py"
 * Prefer explicit type hints on public functions and class methods.
 * Keep functions small and composable.
 * Use dependency injection for external services.
+* **For LLM interactions, use Microsoft Agent Framework** (`microsoft-agents`). Never use `azure-ai-projects` directly if Agent Framework provides the needed functionality.
 
 ## Runtime behavior
 
