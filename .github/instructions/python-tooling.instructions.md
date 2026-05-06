@@ -5,14 +5,16 @@ applyTo: "**/*.py"
 
 ## Package Management — Always use `uv`
 
-* `uv add <package>` — add a dependency
-* `uv add --group dev <package>` — add a dev dependency
+* `uv add <package>` — add a dependency (pulls latest version by default)
+* `uv add --group dev <package>` — add a dev dependency (pulls latest version)
 * `uv sync --extra dev` — install/sync environment with dev extras
 * `uv sync --reinstall-package <name>` — force reinstall a specific package
 * `uv run <tool>` — run a CLI tool within the managed environment
 * `uv run pytest` — run tests
 * `uv run ruff check .` — run linter
 * Never use raw `pip install` in this project.
+* **Always pull latest package versions** when adding new packages with `uv add`. Avoid pinning to older versions unless there's a specific compatibility reason (document in PR).
+* **Latest GitHub Actions versions** must be used. Always update action versions to the latest available (e.g., `actions/checkout@v4`, `actions/setup-python@v5`). Check the official action repositories for the latest versions.
 
 ## Pre-release Packages
 
@@ -43,6 +45,51 @@ applyTo: "**/*.py"
 
 * Install: `uv run pre-commit install && uv run pre-commit install --hook-type pre-push`
 * Run manually: `uv run pre-commit run --all-files`
+* **Fast checks on pre-commit**: linting (ruff), formatting (ruff), type checking (mypy), security scanning (bandit, semgrep), and infrastructure validation
+* **Slower checks on pre-push**: pytest runs before pushing to remote, ensuring all tests pass before code goes upstream
+* **Pre-commit must be fast** — commit should not be blocked for more than a few seconds
+* Install both hook types to enable full protection: pre-commit validates quality, pre-push validates correctness
+
+## Feature Completion Checklist — Static Code Analysis
+
+**All local static analysis tools must run and succeed before a new feature is considered complete.**
+
+Run all checks locally before submitting a PR:
+
+```bash
+# Python static analysis
+uv run ruff check .                  # Lint check
+uv run ruff format .                 # Auto-format code
+uv run mypy src/                     # Type checking
+uv run bandit -r src/                # Security scanning
+uv run semgrep --config=p/security-audit src/  # Code analysis
+
+# Tests
+uv run pytest -W error               # Run tests (strict mode)
+
+# Infrastructure (if modified)
+cd infra && terraform fmt -check -recursive .  # Terraform format
+cd infra && terraform validate                  # Terraform validation
+cd infra && tflint --recursive                  # Terraform linting
+cd infra && tfsec .                             # Terraform security
+cd infra && checkov -d . --framework terraform  # Infrastructure compliance
+```
+
+Or run all pre-commit hooks at once:
+
+```bash
+uv run pre-commit run --all-files    # Runs all enabled pre-commit hooks
+```
+
+**Note**: The `pytest -W error` check is automatically run on `pre-push`, so ensure it passes before pushing. If any tool fails, fix the issues and commit/push again — do not skip or bypass these checks.
+
+## Static Code Analysis and Security Scanning
+
+* Run static analysis locally: `uv run ruff check .`, `uv run mypy src/`, `uv run bandit -r src/`
+* **Pre-commit hooks** include fast static analysis tools (ruff, mypy, bandit, semgrep)
+* **GitHub Actions pipeline** (`code-analysis.yml`) runs comprehensive static analysis and code scanning on every push and PR
+* See `.github/workflows/code-analysis.yml` for the full suite of analysis tools run in CI/CD
+
 
 ## LLM and AI Interactions — Always use Microsoft Agent Framework
 

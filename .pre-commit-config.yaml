@@ -6,6 +6,25 @@ repos:
         args: [--fix]
       - id: ruff-format
 
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.1
+    hooks:
+      - id: mypy
+        args: [src/]
+        additional_dependencies: ['types-all']
+
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: ['-r', 'src/']
+
+  - repo: https://github.com/returntocorp/semgrep
+    rev: v1.95.6
+    hooks:
+      - id: semgrep
+        args: ['--config=p/security-audit', 'src/']
+
   - repo: local
     hooks:
       - id: terraform-fmt
@@ -29,9 +48,24 @@ repos:
         pass_filenames: false
         files: ^infra/.*\.tf$
 
+      - id: tfsec
+        name: tfsec (infrastructure security)
+        entry: bash -c 'cd infra && tfsec .'
+        language: system
+        pass_filenames: false
+        files: ^infra/.*\.tf$
+
+      - id: checkov
+        name: checkov (infrastructure compliance)
+        entry: bash -c 'cd infra && checkov -d . --framework terraform'
+        language: system
+        pass_filenames: false
+        files: ^infra/.*\.tf$
+
       - id: pytest
         name: pytest
         entry: uv run pytest -W error
         language: system
         pass_filenames: false
         stages: [pre-push]
+
