@@ -13,6 +13,7 @@ applyTo: "**/*.py"
 * `uv run pytest` — run tests
 * `uv run ruff check .` — run linter
 * Never use raw `pip install` in this project.
+* **Prefer packages published and maintained by Microsoft** whenever they provide the required functionality. Add a third-party package only when no suitable Microsoft-published package exists, and document the reason in the pull request.
 
 ## Pre-release Packages
 

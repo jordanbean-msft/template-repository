@@ -10,7 +10,7 @@ applyTo: "infra/**/*.tf"
 - Store remote state in **Azure Blob Storage** via an `azurerm` backend. Backend configuration is supplied through `infra/provider.conf.json` with `${RS_*}` and `${AZURE_ENV_NAME}` placeholders that azd substitutes at runtime.
 - Variable values are supplied through `infra/main.tfvars.json` with `${VAR_NAME}` placeholders that azd substitutes from its environment. This is the primary mechanism for passing configuration from azd to Terraform.
 - Before provisioning, the operator sets remote state coordinates: `azd env set RS_RESOURCE_GROUP <rg>`, `azd env set RS_STORAGE_ACCOUNT <sa>`, `azd env set RS_CONTAINER_NAME <container>`.
-- Always look up the latest stable versions of Terraform providers and Azure Verified Modules during development before pinning.
+- Always look up the latest stable versions of Terraform providers during development before pinning.
 
 ## Azure Developer CLI (azd) variable flow
 
@@ -57,13 +57,13 @@ applyTo: "infra/**/*.tf"
   ```
 - Use `data.azurerm_resource_group.rg.name` and `data.azurerm_resource_group.rg.location` throughout.
 
-## Azure Verified Modules (AVM)
+## Azure resource implementation
 
-- **Prefer Azure Verified Modules** (`Azure/avm-res-*`) over raw `azurerm_*` resources whenever an AVM module exists for the resource type.
-- Always set `enable_telemetry = false` on AVM modules.
-- Use AVM-managed `role_assignments`, `diagnostic_settings`, and `private_endpoints` blocks rather than creating separate resources when the AVM module supports them.
-- Set `private_endpoints_manage_dns_zone_group = false` when DNS is managed externally (e.g., by a platform team or Azure Policy).
-- Pin AVM module versions with `~>` constraints. Look up the latest version on the Terraform registry before using.
+- **Do not use Azure Verified Modules** (`Azure/avm-res-*`).
+- Define Azure resources directly with `azurerm_*` resources whenever the AzureRM provider supports the required resource and properties.
+- Use `azapi_*` resources only when the required resource or property is unavailable in `azurerm`.
+- Prefer dedicated resources for role assignments, diagnostic settings, and private endpoints so their lifecycle and dependencies remain explicit.
+- Pin `azurerm` and `azapi` provider versions with `~>` constraints. Look up the latest stable versions on the Terraform registry before using.
 
 ## Variable design
 
@@ -140,16 +140,18 @@ applyTo: "infra/**/*.tf"
 
 ## Networking and private endpoints
 
-- Pass a `private_endpoint_subnet_id` variable into modules that need private endpoints.
-- For AVM modules, use the built-in `private_endpoints` block.
-- For direct `azurerm_private_endpoint` resources, always add `lifecycle { ignore_changes = [private_dns_zone_group] }` when DNS is managed externally.
+- Assume the target virtual network and subnets already exist. Reference them with `data "azurerm_virtual_network"` and `data "azurerm_subnet"` data sources, or accept existing subnet IDs as inputs; do not create VNets or subnets in this Terraform configuration.
+- Pass an existing `private_endpoint_subnet_id` into modules that need private endpoints.
+- Assume the required private DNS zones already exist and are associated with Azure Deploy If Not Exists (DINE) policies that configure private endpoint DNS zone groups and virtual network links.
+- Create only the private endpoints with `azurerm_private_endpoint` resources, or `azapi_resource` only when AzureRM lacks required functionality. Do not create or manage private DNS zones, private DNS virtual network links, or private DNS zone groups in Terraform.
+- Add `lifecycle { ignore_changes = [private_dns_zone_group] }` to every `azurerm_private_endpoint` resource so DNS configuration applied by DINE policies does not cause Terraform drift.
 - Name private endpoints as `{resource_name}-pe` and service connections as `{resource_name}-psc`.
 - Default to private-only access (`public_network_access_enabled = false`). The root variable allows toggling for development.
 
 ## RBAC and identity
 
 - Create a **user-assigned managed identity** for the application and pass its principal ID and client ID to modules that need data-plane access.
-- Use AVM `role_assignments` blocks when available; otherwise use `azurerm_role_assignment` resources.
+- Create role assignments with `azurerm_role_assignment` resources, using `azapi_resource` only when AzureRM cannot express the required assignment.
 - Apply least-privilege roles (e.g., `Storage Blob Data Contributor` not `Owner`).
 - For role assignments on resources with eventual-consistency identity propagation, use `time_sleep` resources as explicit dependencies.
 - Use `uuidv5("dns", ...)` for deterministic role assignment `name` fields to ensure idempotency.
@@ -168,7 +170,7 @@ applyTo: "infra/**/*.tf"
 
 - Always deploy a **Log Analytics Workspace** and **Application Insights** resource (monitoring module).
 - Pass the Log Analytics workspace ID to all modules so they can configure `diagnostic_settings`.
-- In AVM modules, configure `diagnostic_settings` with appropriate `log_categories` and `metric_categories`.
+- Configure diagnostics with `azurerm_monitor_diagnostic_setting` resources and appropriate enabled log categories and metrics.
 
 ## General best practices
 
@@ -176,4 +178,4 @@ applyTo: "infra/**/*.tf"
 - Prefer explicit `depends_on` over implicit dependency when ordering matters for identity propagation or RBAC.
 - Keep modules focused on a single Azure service or logical grouping.
 - Add descriptions to all variables, outputs, and complex locals.
-- Use `lifecycle { ignore_changes = [...] }` sparingly and only for properties managed outside Terraform (e.g., DNS zone groups managed by Azure Policy).
+- Use `lifecycle { ignore_changes = [...] }` sparingly and only for properties managed outside Terraform, including private endpoint DNS zone groups managed by Azure DINE policies.
