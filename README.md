@@ -30,6 +30,17 @@ Then:
 3. Update the architecture diagram in `.img/architecture.drawio`
 4. Update `.env.example` with your project's environment variables
 5. Set remote state: `azd env set RS_PROJECT_NAME your-repo-name`
+6. Review `.pre-commit-config.yaml` and remove checks that do not apply to the new repository
+7. Initialize the development environment and hooks:
+
+```bash
+uv sync --extra dev
+uv run pre-commit install --install-hooks
+uv run pre-commit install --hook-type pre-push
+uv run pre-commit run --all-files
+```
+
+Commit any formatting or file-hygiene changes made by the initial all-files run.
 
 ## Prerequisites
 
@@ -50,7 +61,7 @@ uv sync --extra dev
 2. Install pre-commit hooks:
 
 ```bash
-uv run pre-commit install
+uv run pre-commit install --install-hooks
 uv run pre-commit install --hook-type pre-push
 ```
 
@@ -78,6 +89,24 @@ uv run template-repository
 uv run ruff check .
 uv run pytest
 ```
+
+## Pre-commit hooks
+
+The default `.pre-commit-config.yaml` provides:
+
+- File hygiene and safety checks for whitespace, line endings, merge markers, private keys, large files, and YAML, JSON, and TOML syntax
+- Ruff linting and formatting for Python
+- Terraform formatting, validation, and linting for infrastructure changes
+- Warning-free unit tests before pushes
+
+Run all hooks manually after changing hook configuration or before opening a pull request:
+
+```bash
+uv run pre-commit run --all-files
+uv run pre-commit run --all-files --hook-stage pre-push
+```
+
+When using this template for a repository without Python or Terraform, remove the corresponding hooks instead of leaving permanently skipped or failing checks.
 
 ## Test with coverage
 

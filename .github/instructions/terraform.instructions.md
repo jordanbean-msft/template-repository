@@ -67,7 +67,7 @@ applyTo: "infra/**/*.tf"
 
 ## Variable design
 
-- Group related configuration into **typed objects** with `optional()` defaults rather than using many flat variables. Examples:
+- Group related configuration into **typed objects** rather than using many flat variables. Deployment-specific settings must be required object attributes without Terraform defaults. Examples:
   ```hcl
   variable "azure" {
     type = object({
@@ -82,17 +82,19 @@ applyTo: "infra/**/*.tf"
 
   variable "sql" {
     type = object({
-      sku_name    = optional(string, "S2")
-      max_size_gb = optional(number, 250)
+      sku_name    = string
+      max_size_gb = number
     })
-    default = {}
   }
   ```
+- Specify all deployment sizing and runtime configuration explicitly in `main.tfvars.json`. This includes SKUs, tiers, VM sizes, CPU, memory, capacity, replica counts, storage sizes, throughput, retention periods, port numbers, timeouts, and similar service-specific settings.
+- Do not default deployment-specific settings in `variable` blocks, `optional()` type attributes, locals, resources, or modules. Root variables and child-module inputs for these settings must be required, and the root module must pass them explicitly.
+- Keep environment-specific values as azd `${PLACEHOLDER}` entries in `main.tfvars.json`; keep fixed project choices as explicit literal values in that file. The tfvars file must remain the visible source of every deployed specification.
 - Add `validation` blocks for variables that have constrained value sets or formats.
 - Use a `tags` variable (`map(string)`, default `{}`) for user-provided tag overrides.
 - Use a `naming` object variable with a short `project_name` (1–8 lowercase alphanumeric) for resource naming.
-- Provide a `public_network_access_enabled` boolean (default `false`) at the root and propagate it to every module. This enables easy toggling between public-accessible (dev) and private-only (prod) deployments.
-- When a new variable is needed, add it to both `variables.tf` (with type and default) and `main.tfvars.json` (with an azd `${PLACEHOLDER}` if operator-supplied, or a static default if fixed per project).
+- Require a `public_network_access_enabled` boolean at the root, set it explicitly in `main.tfvars.json`, and propagate it to every module. This enables deliberate toggling between public-accessible and private-only deployments.
+- When a new deployment-specific variable is needed, add it to `variables.tf` without a default and to `main.tfvars.json` with an azd `${PLACEHOLDER}` if operator-supplied or an explicit literal value if fixed per project.
 
 ## Naming conventions
 
@@ -150,7 +152,11 @@ applyTo: "infra/**/*.tf"
 
 ## RBAC and identity
 
-- Create a **user-assigned managed identity** for the application and pass its principal ID and client ID to modules that need data-plane access.
+- Always favor **user-assigned managed identities** and Azure RBAC for authentication and authorization between Azure services.
+- Create a user-assigned managed identity for each application or workload identity boundary, and pass its resource ID, principal ID, and client ID to every module that requires service-to-service access.
+- Prefer user-assigned identities over system-assigned identities so identity lifecycle, role assignments, and reuse remain explicit and independent of a single resource.
+- Use identity-based SDK authentication and service endpoints at runtime. Do not use access keys, shared secrets, embedded credentials, or connection strings containing credentials when managed identity and Azure RBAC are supported.
+- Use credential-based authentication only when the target service does not support managed identity or Azure RBAC; document the limitation and store required secrets in Azure Key Vault.
 - Create role assignments with `azurerm_role_assignment` resources, using `azapi_resource` only when AzureRM cannot express the required assignment.
 - Apply least-privilege roles (e.g., `Storage Blob Data Contributor` not `Owner`).
 - For role assignments on resources with eventual-consistency identity propagation, use `time_sleep` resources as explicit dependencies.
