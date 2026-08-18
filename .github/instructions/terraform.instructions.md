@@ -12,6 +12,14 @@ applyTo: "infra/**/*.tf"
 - Before provisioning, the operator sets remote state coordinates: `azd env set RS_RESOURCE_GROUP <rg>`, `azd env set RS_STORAGE_ACCOUNT <sa>`, `azd env set RS_CONTAINER_NAME <container>`.
 - Always look up the latest stable versions of Terraform providers during development before pinning.
 
+## Formatting and validation
+
+- Format every Terraform change during development with `terraform -chdir=infra fmt -recursive`.
+- Before considering a Terraform change complete, run `terraform -chdir=infra fmt -check -recursive` and `terraform -chdir=infra validate`.
+- Run `terraform -chdir=infra init -backend=false` before validation when the working directory has not been initialized or provider/module requirements have changed.
+- Treat Terraform warnings as failures. A Terraform change is complete only when formatting checks and validation finish with zero errors and zero warnings.
+- Resolve all formatting and validation findings caused by the change; do not suppress, ignore, or defer them.
+
 ## Azure Developer CLI (azd) variable flow
 
 - azd owns the lifecycle of environment variables. Terraform receives them via `main.tfvars.json` placeholder substitution.
@@ -33,8 +41,9 @@ applyTo: "infra/**/*.tf"
     }
   }
   ```
-- Terraform outputs (e.g., `APP_INSIGHTS_CONNECTION_STRING`, `BACKEND_APP_SERVICE_NAME`) are automatically captured by azd and made available as environment variables for subsequent `azd deploy` steps and service configuration.
-- When adding new infrastructure that produces values needed by the application or by azd service mappings, add corresponding Terraform outputs with SCREAMING_SNAKE_CASE names.
+- Terraform root-module outputs are automatically captured by azd and made available as environment variables for subsequent `azd deploy` steps and service configuration.
+- Assume every useful child-module output will be mapped by the root module to the canonical environment-variable name expected by azd. When azd defines or conventionally expects a name for a value, always use that exact name instead of inventing a project-specific alternative. For example, expose an Azure Container Registry name as `AZURE_CONTAINER_REGISTRY` and its login server as `AZURE_CONTAINER_REGISTRY_ENDPOINT`.
+- When adding infrastructure that produces values needed by the application or by azd service mappings, add corresponding root-module outputs with canonical azd-compatible SCREAMING_SNAKE_CASE names.
 
 ## Provider configuration
 
@@ -146,7 +155,13 @@ applyTo: "infra/**/*.tf"
 - Pass an existing `private_endpoint_subnet_id` into modules that need private endpoints.
 - Assume the required private DNS zones already exist and are associated with Azure Deploy If Not Exists (DINE) policies that configure private endpoint DNS zone groups and virtual network links.
 - Create only the private endpoints with `azurerm_private_endpoint` resources, or `azapi_resource` only when AzureRM lacks required functionality. Do not create or manage private DNS zones, private DNS virtual network links, or private DNS zone groups in Terraform.
-- Add `lifecycle { ignore_changes = [private_dns_zone_group] }` to every `azurerm_private_endpoint` resource so DNS configuration applied by DINE policies does not cause Terraform drift.
+- Every `azurerm_private_endpoint` resource, regardless of service or module, must ignore changes to its policy-managed DNS zone group:
+  ```hcl
+  lifecycle {
+    ignore_changes = [private_dns_zone_group]
+  }
+  ```
+  This is required even when the resource does not declare a `private_dns_zone_group` block, because DINE policies add the block after endpoint creation and Terraform must not remove it or report drift.
 - Name private endpoints as `{resource_name}-pe` and service connections as `{resource_name}-psc`.
 - Default to private-only access (`public_network_access_enabled = false`). The root variable allows toggling for development.
 
@@ -168,7 +183,9 @@ applyTo: "infra/**/*.tf"
 
 - Export values that downstream azd deployment or application configuration needs (connection strings, URIs, resource names).
 - Mark sensitive outputs with `sensitive = true` (connection strings, instrumentation keys, FQDNs).
-- Use SCREAMING_SNAKE_CASE for output names that map to azd environment variables (e.g., `APP_INSIGHTS_CONNECTION_STRING`).
+- Design child-module outputs with the assumption that the root module will map them to azd environment variables. Child-module output names may describe the value idiomatically, but their corresponding root-module outputs must use the expected azd names.
+- Before naming a root-module output, determine whether azd has a standard or expected environment-variable name for that resource or value. If one exists, always use it exactly; only introduce a new SCREAMING_SNAKE_CASE name when azd has no applicable convention.
+- Prefer azd-compatible names such as `AZURE_CONTAINER_REGISTRY` and `AZURE_CONTAINER_REGISTRY_ENDPOINT` over custom alternatives such as `ACR_NAME`, `REGISTRY_LOGIN_SERVER`, or service-prefixed variants.
 - Use ternary expressions for outputs from conditional modules: `var.x.enabled ? module.x[0].output : null`.
 - Terraform outputs are automatically captured by azd after `azd provision` and become available as environment variables for `azd deploy` and application runtime.
 
