@@ -191,9 +191,15 @@ applyTo: "infra/**/*.tf"
 
 ## Monitoring and diagnostics
 
-- Always deploy a **Log Analytics Workspace** and **Application Insights** resource (monitoring module).
-- Pass the Log Analytics workspace ID to all modules so they can configure `diagnostic_settings`.
-- Configure diagnostics with `azurerm_monitor_diagnostic_setting` resources and appropriate enabled log categories and metrics.
+- Always deploy a **Log Analytics Workspace** and a workspace-based **Application Insights** resource in the monitoring module. Configure Application Insights with `workspace_id` so telemetry is stored in the shared Log Analytics workspace.
+- Pass the Log Analytics workspace resource ID and the Application Insights connection string to every module that needs them.
+- Every Azure resource that supports Azure Monitor diagnostic settings must have a dedicated `azurerm_monitor_diagnostic_setting` resource. Do not omit diagnostics for cost, convenience, or because platform logs are not currently queried.
+- Send all supported resource log categories and metrics to the shared Log Analytics workspace. Use `data "azurerm_monitor_diagnostic_categories"` when practical so newly supported categories are enabled without maintaining hard-coded category lists.
+- Set `log_analytics_destination_type = "Dedicated"` when the resource supports resource-specific Log Analytics tables; use `AzureDiagnostics` only when dedicated tables are unavailable or incompatible.
+- Give diagnostic settings deterministic names and keep them in the same child module as the monitored resource. Create separate diagnostic settings when Azure requires different destinations or category combinations.
+- Enable native Application Insights integration for every service that supports it, including application hosting and compute services. Supply the Application Insights connection string through the service's supported configuration mechanism, enable platform or agent-based instrumentation when available, and configure application telemetry collection rather than relying only on Azure Monitor resource logs.
+- Prefer `APPLICATIONINSIGHTS_CONNECTION_STRING` over instrumentation keys for application runtime configuration. Treat the connection string as sensitive in Terraform variables and outputs, and never hard-code it.
+- Diagnostic settings and Application Insights integration are mandatory acceptance criteria for every new or modified Azure service. If a resource supports neither capability, document that limitation in the Terraform module.
 
 ## General best practices
 
